@@ -18,7 +18,7 @@ import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import {
   Upload, Shield, Link2, Copy, Check, AlertCircle,
-  FileText, Image, File, Eye, Clock, Zap,
+  FileText, Image, File, Video, Music, Eye, Clock, Zap,
   Loader2, ExternalLink, Lock, Cpu, Globe
 } from "lucide-react";
 import {
@@ -63,14 +63,18 @@ const STAGES: Record<Stage, StageInfo> = {
   error:       { label: "Error",                      icon: AlertCircle, color: "text-red-400" },
 };
 
-const MAX_FILE_SIZE_MB = 50;
+const MAX_FILE_SIZE_MB = 200;
+const LARGE_FILE_WARN_MB = 50; // Show RAM/speed warning above this size
+const DEMO_STORAGE_WARN_MB = 8; // Demo mode localStorage limit warning
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SUB-COMPONENTS
 // ─────────────────────────────────────────────────────────────────────────────
 
 function FileIcon({ mime }: { mime: string }) {
-  if (mime.startsWith("image/")) return <Image className="h-8 w-8 text-violet-400" />;
+  if (mime.startsWith("image/"))  return <Image className="h-8 w-8 text-violet-400" />;
+  if (mime.startsWith("video/"))  return <Video className="h-8 w-8 text-fuchsia-400" />;
+  if (mime.startsWith("audio/"))  return <Music className="h-8 w-8 text-pink-400" />;
   if (mime === "application/pdf") return <FileText className="h-8 w-8 text-orange-400" />;
   return <File className="h-8 w-8 text-slate-400" />;
 }
@@ -134,6 +138,7 @@ export default function UploadView() {
   const [cid,             setCid]             = useState("");
   const [txHash,          setTxHash]          = useState("");
   const [isDemoMode,      setIsDemoMode]      = useState(isDemo());
+  const [uploadProgress,  setUploadProgress]  = useState<number | null>(null);
   const [encryptionStats, setEncryptionStats] = useState<{
     originalSize: number;
     encryptedSize: number;
@@ -164,11 +169,14 @@ export default function UploadView() {
     onDrop,
     multiple: false,
     accept: {
-      "image/*":       [],
-      "application/pdf": [],
-      "text/*":        [],
-      "application/json": [],
-      "application/zip": [],
+      "image/*":                  [],
+      "video/*":                  [],
+      "audio/*":                  [],
+      "application/pdf":          [],
+      "text/*":                   [],
+      "application/json":         [],
+      "application/zip":          [],
+      "application/octet-stream": [],
     },
     maxSize: MAX_FILE_SIZE_MB * 1024 * 1024,
   });
@@ -206,7 +214,13 @@ export default function UploadView() {
 
       // ── Step 3: Upload encrypted blob to IPFS ───────────────────────────
       setStage("uploading");
-      const uploadResult = await uploadFile(result.encryptedBlob, file.name);
+      setUploadProgress(0);
+      const uploadResult = await uploadFile(
+        result.encryptedBlob,
+        file.name,
+        (pct) => setUploadProgress(pct)
+      );
+      setUploadProgress(null);
       setCid(uploadResult.cid);
       setIsDemoMode(uploadResult.isDemo);
 
@@ -274,6 +288,7 @@ export default function UploadView() {
     setCid("");
     setTxHash("");
     setEncryptionStats(null);
+    setUploadProgress(null);
   };
 
   const isProcessing = ["reading", "encrypting", "uploading", "contracting"].includes(stage);
@@ -353,28 +368,59 @@ export default function UploadView() {
                       or <span className="text-cyan-400 hover:underline">click to browse</span>
                     </p>
                     <p className="text-xs text-slate-600 mt-2">
-                      PDF, Images, Text, JSON — Max {MAX_FILE_SIZE_MB}MB
+                      Images, Videos, Audio, PDFs, Files — Max {MAX_FILE_SIZE_MB}MB
                     </p>
+                    {/* File type pills */}
+                    <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+                      {["🖼️ Images", "🎬 Videos", "🎵 Audio", "📄 PDF", "📦 ZIP", "📁 Any File"].map(t => (
+                        <span key={t} className="text-[10px] text-slate-600 border border-white/5 rounded-full px-2 py-0.5">{t}</span>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
             ) : (
               /* Selected file preview */
-              <div className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                <FileIcon mime={file.type} />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-white truncate">{file.name}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {formatBytes(file.size)} · {file.type || "unknown type"}
-                  </p>
+              <div className="space-y-2">
+                <div className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                  <FileIcon mime={file.type} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-white truncate">{file.name}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {formatBytes(file.size)} · {file.type || "binary file"}
+                    </p>
+                  </div>
+                  {stage === "idle" && (
+                    <button
+                      onClick={reset}
+                      className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                    >
+                      Change
+                    </button>
+                  )}
                 </div>
-                {stage === "idle" && (
-                  <button
-                    onClick={reset}
-                    className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
-                  >
-                    Change
-                  </button>
+
+                {/* Large file RAM warning */}
+                {file.size > LARGE_FILE_WARN_MB * 1024 * 1024 && (
+                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 flex items-start gap-2">
+                    <AlertCircle className="h-3.5 w-3.5 text-amber-400 mt-0.5 shrink-0" />
+                    <p className="text-xs text-amber-400">
+                      <strong>Large File ({formatBytes(file.size)}):</strong> Encryption runs entirely
+                      in your browser. This will use ~{Math.ceil(file.size / (1024 * 1024) * 3)}MB of RAM.
+                      Keep this tab open until upload completes.
+                    </p>
+                  </div>
+                )}
+
+                {/* Demo mode + large file localStorage warning */}
+                {isDemoMode && file.size > DEMO_STORAGE_WARN_MB * 1024 * 1024 && (
+                  <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 flex items-start gap-2">
+                    <AlertCircle className="h-3.5 w-3.5 text-red-400 mt-0.5 shrink-0" />
+                    <p className="text-xs text-red-400">
+                      <strong>Demo Mode Warning:</strong> Files over ~8MB may not fit in browser
+                      localStorage. Configure Pinata in <code>.env</code> for real IPFS uploads.
+                    </p>
+                  </div>
                 )}
               </div>
             )}
@@ -473,18 +519,33 @@ export default function UploadView() {
                 <StageIndicator stage={stage} />
                 {stage !== "error" && (
                   <span className="text-xs text-slate-600">
-                    {Math.max(0, currentStep)}/{progressSteps.length - 1}
+                    {stage === "uploading" && uploadProgress !== null
+                      ? `${uploadProgress}%`
+                      : `${Math.max(0, currentStep)}/${progressSteps.length - 1}`
+                    }
                   </span>
                 )}
               </div>
 
-              {/* Progress bar */}
+              {/* Progress bar — switches to byte-level progress during upload */}
               {stage !== "error" && (
-                <div className="h-1 rounded-full bg-white/5 overflow-hidden">
+                <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-violet-500 transition-all duration-500"
-                    style={{ width: `${((Math.max(0, currentStep)) / (progressSteps.length - 1)) * 100}%` }}
+                    className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-violet-500 transition-all duration-300"
+                    style={{
+                      width: stage === "uploading" && uploadProgress !== null
+                        ? `${uploadProgress}%`
+                        : `${((Math.max(0, currentStep)) / (progressSteps.length - 1)) * 100}%`
+                    }}
                   />
+                </div>
+              )}
+
+              {/* Uploading: show byte-level detail */}
+              {stage === "uploading" && uploadProgress !== null && (
+                <div className="mt-2 flex items-center justify-between text-xs">
+                  <span className="text-slate-500">Uploading to IPFS…</span>
+                  <span className="font-mono text-violet-400 font-semibold">{uploadProgress}% complete</span>
                 </div>
               )}
 

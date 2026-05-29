@@ -327,18 +327,62 @@ export function readFileAsBytes(file: File): Promise<Uint8Array> {
 /**
  * Detects MIME type from magic bytes for rendering decrypted content.
  * Used to reconstruct the blob type after AES-GCM decryption.
+ *
+ * Extended to support video (MP4, WebM, MOV, AVI, MKV) and
+ * audio (MP3, WAV, OGG, FLAC) formats in addition to original types.
  */
 export function detectMimeType(bytes: Uint8Array): string {
-  const hex = Array.from(bytes.slice(0, 8))
+  // Helper to read hex from a specific byte offset
+  const hex12 = Array.from(bytes.slice(0, 12))
     .map(b => b.toString(16).padStart(2, "0"))
     .join("");
+  const hex8 = hex12.slice(0, 16);
+  const hex4 = hex8.slice(0, 8);
 
-  if (hex.startsWith("89504e47"))          return "image/png";
-  if (hex.startsWith("ffd8ff"))            return "image/jpeg";
-  if (hex.startsWith("47494638"))          return "image/gif";
-  if (hex.startsWith("25504446"))          return "application/pdf";
-  if (hex.startsWith("504b0304"))          return "application/zip";
-  if (hex.startsWith("52494646"))          return "image/webp";
-  if (hex.startsWith("000000") && hex.includes("667479")) return "video/mp4";
+  // ── Images ──────────────────────────────────────────────────────────────
+  if (hex8.startsWith("89504e47"))          return "image/png";
+  if (hex8.startsWith("ffd8ff"))            return "image/jpeg";
+  if (hex8.startsWith("47494638"))          return "image/gif";
+  if (hex8.startsWith("52494646") && hex12.slice(16, 24) === "57454250")
+                                            return "image/webp";  // RIFF....WEBP
+  if (hex8.startsWith("52494646"))          return "image/webp";  // RIFF fallback
+
+  // ── Documents ───────────────────────────────────────────────────────────
+  if (hex8.startsWith("25504446"))          return "application/pdf";
+  if (hex8.startsWith("504b0304"))          return "application/zip";
+  if (hex8.startsWith("526172211a07"))      return "application/x-rar-compressed"; // RAR
+
+  // ── Video ────────────────────────────────────────────────────────────────
+  // MP4 / MOV / M4V: ftyp box at byte 4 (bytes 4-7 = "ftyp" = 66 74 79 70)
+  if (hex12.slice(8, 16) === "66747970") {
+    // Check brand to distinguish MP4 vs QuickTime/MOV
+    const brand = hex12.slice(16, 24);
+    if (brand === "71742020" || brand === "6d6f6f76") return "video/quicktime"; // qt__ or moov
+    return "video/mp4";
+  }
+  // WebM / MKV: EBML magic 1A 45 DF A3
+  if (hex4.startsWith("1a45dfa3"))          return "video/webm";
+  // AVI: RIFF....AVI (52 49 46 46 xx xx xx xx 41 56 49 20)
+  if (hex8.startsWith("52494646") && hex12.slice(16, 24) === "41564920")
+                                            return "video/x-msvideo";
+  // MKV (Matroska) — also starts with EBML but docType is matroska, same magic
+  // (already caught by webm above as best-guess; browser will handle it)
+
+  // ── Audio ────────────────────────────────────────────────────────────────
+  // MP3: ID3 tag (49 44 33) or raw frame sync (FF FB / FF F3 / FF F2)
+  if (hex4.startsWith("494433"))            return "audio/mpeg"; // ID3
+  if (hex4.startsWith("fffb") || hex4.startsWith("fff3") || hex4.startsWith("fff2"))
+                                            return "audio/mpeg"; // MP3 frame sync
+  // WAV: RIFF....WAVE (52 49 46 46 xx xx xx xx 57 41 56 45)
+  if (hex8.startsWith("52494646") && hex12.slice(16, 24) === "57415645")
+                                            return "audio/wav";
+  // OGG: OggS (4F 67 67 53)
+  if (hex4.startsWith("4f676753"))          return "audio/ogg";
+  // FLAC: fLaC (66 4C 61 43)
+  if (hex4.startsWith("664c6143"))          return "audio/flac";
+  // M4A / AAC inside MP4 container — ftyp brand M4A (6d 34 61 20)
+  if (hex12.slice(8, 16) === "66747970" && hex12.slice(16, 24) === "6d346120")
+                                            return "audio/mp4";
+
   return "application/octet-stream";
 }

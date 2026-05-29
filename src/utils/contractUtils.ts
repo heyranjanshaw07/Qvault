@@ -430,9 +430,13 @@ export function demoRequestAccess(
 
   if (!doc) {
     // CID not in this browser (link opened in different browser/device).
-    // Auto-create a permissive record using the limits from the URL
-    const limitViews = urlMaxViews !== undefined ? urlMaxViews : 3;
-    const limitExpiry = urlExpiryHours !== undefined ? urlExpiryHours : 0;
+    // Auto-create a permissive record using the limits from the URL.
+    // NOTE: urlMaxViews comes from the URL hash fragment embedded at upload time.
+    // We intentionally do NOT fall back to a permissive default — if maxViews is
+    // absent from the URL (real IPFS mode without demo hash), we use 1 (most
+    // restrictive safe default) to prevent accidentally granting unlimited views.
+    const limitViews   = urlMaxViews   !== undefined ? urlMaxViews   : 1;
+    const limitExpiry  = urlExpiryHours !== undefined ? urlExpiryHours : 0;
     const expirationTimestamp = limitExpiry > 0
       ? Math.floor(Date.now() / 1000) + limitExpiry * 3600
       : 0;

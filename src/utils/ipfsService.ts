@@ -75,10 +75,14 @@ export async function testPinataConnection(): Promise<boolean> {
 /**
  * Uploads the AES-encrypted file blob to IPFS via Pinata.
  * The blob is completely opaque — only the Q-Link holder can decrypt it.
+ *
+ * Uses XMLHttpRequest (instead of fetch) to support upload progress events
+ * for large files. The optional `onProgress` callback receives 0–100 values.
  */
 export async function uploadEncryptedFile(
   encryptedBlob: Uint8Array,
-  fileName: string
+  fileName: string,
+  onProgress?: (pct: number) => void
 ): Promise<UploadResult> {
   console.log(`[Qvault IPFS] Uploading encrypted blob: ${encryptedBlob.length} bytes`);
 
@@ -95,26 +99,47 @@ export async function uploadEncryptedFile(
   }));
   formData.append("pinataOptions", JSON.stringify({ cidVersion: 1 }));
 
-  const response = await fetch(`${PINATA_API_URL}/pinning/pinFileToIPFS`, {
-    method: "POST",
-    headers: pinataHeaders(),
-    body: formData,
+  return new Promise<UploadResult>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+
+    // ── Upload progress ──────────────────────────────────────────────────
+    if (onProgress) {
+      xhr.upload.onprogress = (evt) => {
+        if (evt.lengthComputable) {
+          const pct = Math.round((evt.loaded / evt.total) * 100);
+          onProgress(pct);
+        }
+      };
+    }
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText) as { IpfsHash: string; PinSize: number };
+          console.log(`[Qvault IPFS] File uploaded. CID: ${data.IpfsHash}`);
+          if (onProgress) onProgress(100);
+          resolve({
+            cid: data.IpfsHash,
+            gatewayUrl: `${PINATA_GATEWAY}/${data.IpfsHash}`,
+            size: data.PinSize,
+            isDemo: false,
+          });
+        } catch {
+          reject(new Error(`IPFS upload failed — invalid JSON response: ${xhr.responseText.slice(0, 200)}`));
+        }
+      } else {
+        reject(new Error(`IPFS upload failed (${xhr.status}): ${xhr.responseText.slice(0, 300)}`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error("IPFS upload network error — check your connection."));
+    xhr.ontimeout = () => reject(new Error("IPFS upload timed out — the file may be too large or the network is slow."));
+
+    xhr.open("POST", `${PINATA_API_URL}/pinning/pinFileToIPFS`);
+    xhr.setRequestHeader("Authorization", `Bearer ${PINATA_JWT}`);
+    xhr.timeout = 10 * 60 * 1000; // 10 minutes for large files
+    xhr.send(formData);
   });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`IPFS upload failed (${response.status}): ${errText}`);
-  }
-
-  const data = await response.json() as { IpfsHash: string; PinSize: number };
-  console.log(`[Qvault IPFS] File uploaded. CID: ${data.IpfsHash}`);
-
-  return {
-    cid: data.IpfsHash,
-    gatewayUrl: `${PINATA_GATEWAY}/${data.IpfsHash}`,
-    size: data.PinSize,
-    isDemo: false,
-  };
 }
 
 /**
@@ -314,13 +339,14 @@ export function isDemo(): boolean {
 /** Upload encrypted file — auto-selects real IPFS or demo mode */
 export async function uploadFile(
   encryptedBlob: Uint8Array,
-  fileName: string
+  fileName: string,
+  onProgress?: (pct: number) => void
 ): Promise<UploadResult> {
   if (isDemo()) {
     console.warn("[Qvault] No Pinata JWT — using DEMO mode.");
     return demoUpload(encryptedBlob, fileName);
   }
-  return uploadEncryptedFile(encryptedBlob, fileName);
+  return uploadEncryptedFile(encryptedBlob, fileName, onProgress);
 }
 
 /** 

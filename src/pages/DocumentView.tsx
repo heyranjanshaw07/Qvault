@@ -22,7 +22,8 @@ import {
   Loader2, Lock, Flame, CheckCircle, ExternalLink,
   FileText, Image as ImageIcon, AlertCircle,
   ChevronLeft, ChevronRight, ZoomIn, ZoomOut,
-  Smartphone, Laptop, Download, Copy, Check
+  Smartphone, Laptop, Download, Copy, Check,
+  Video as VideoIcon, Music as MusicIcon
 } from "lucide-react";
 import {
   decryptFile,
@@ -37,6 +38,7 @@ import {
   parseContractError,
   demoRequestAccess,
   demoGetDocumentInfo,
+  demoCreateDocumentAccess,
   getSigner,
 } from "../utils/contractUtils";
 
@@ -478,6 +480,67 @@ function PdfCanvasViewer({ pdfBytes }: { pdfBytes: Uint8Array }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SECURE VIDEO PLAYER — no-download controls, right-click blocked
+// ─────────────────────────────────────────────────────────────────────────────
+
+function VideoPlayer({ bytes, mimeType }: { bytes: Uint8Array; mimeType: string }) {
+  const safeBuffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(safeBuffer).set(bytes);
+  const blob    = new Blob([safeBuffer], { type: mimeType });
+  const blobUrl = URL.createObjectURL(blob);
+
+  return (
+    <div
+      className="rounded-xl overflow-hidden bg-black"
+      onContextMenu={e => e.preventDefault()}
+    >
+      <video
+        src={blobUrl}
+        controls
+        controlsList="nodownload nofullscreen"
+        playsInline
+        className="w-full max-h-[75vh] mx-auto block"
+        style={{ userSelect: "none" }}
+        onContextMenu={e => e.preventDefault()}
+      />
+      <div className="px-4 py-2 bg-black/40 flex items-center gap-2 border-t border-white/5">
+        <VideoIcon className="h-3.5 w-3.5 text-fuchsia-400" />
+        <span className="text-xs text-slate-500">{mimeType}</span>
+        <span className="ml-auto text-[10px] text-slate-600">Right-click disabled · Secure playback</span>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUDIO PLAYER — styled dark player
+// ─────────────────────────────────────────────────────────────────────────────
+
+function AudioPlayer({ bytes, mimeType }: { bytes: Uint8Array; mimeType: string }) {
+  const safeBuffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(safeBuffer).set(bytes);
+  const blob    = new Blob([safeBuffer], { type: mimeType });
+  const blobUrl = URL.createObjectURL(blob);
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-6 flex flex-col items-center gap-4">
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-pink-500/20 to-violet-500/20 border border-pink-500/20">
+        <MusicIcon className="h-8 w-8 text-pink-400" />
+      </div>
+      <p className="text-sm text-slate-400">Decrypted Audio File</p>
+      <audio
+        src={blobUrl}
+        controls
+        controlsList="nodownload"
+        className="w-full"
+        style={{ colorScheme: "dark" }}
+      />
+      <p className="text-xs text-slate-600">{mimeType}</p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // DOCUMENT RENDERER (for the decrypted file)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -493,14 +556,23 @@ function DocumentRenderer({
   // Copy to a plain ArrayBuffer to avoid SharedArrayBuffer type issues
   const safeBuffer = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(safeBuffer).set(bytes);
-  const blob = new Blob([safeBuffer], { type: mimeType });
+  const blob    = new Blob([safeBuffer], { type: mimeType });
   const blobUrl = URL.createObjectURL(blob);
+
   const isImage = mimeType.startsWith("image/");
-  const isPdf = mimeType === "application/pdf";
-  const isText = mimeType.startsWith("text/") || mimeType === "application/json";
+  const isPdf   = mimeType === "application/pdf";
+  const isText  = mimeType.startsWith("text/") || mimeType === "application/json";
+  const isVideo = mimeType.startsWith("video/");
+  const isAudio = mimeType.startsWith("audio/");
 
   // Decode text content if applicable
   const textContent = isText ? new TextDecoder().decode(bytes) : null;
+
+  // Choose header icon
+  const HeaderIcon = isImage ? ImageIcon
+    : isVideo ? VideoIcon
+    : isAudio ? MusicIcon
+    : FileText;
 
   return (
     <div className="min-h-screen pt-24 pb-16 px-4">
@@ -522,15 +594,15 @@ function DocumentRenderer({
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden">
           {/* Header */}
           <div className="flex items-center gap-3 px-6 py-4 border-b border-white/5">
-            {isImage ? (
-              <ImageIcon className="h-5 w-5 text-violet-400" />
-            ) : isPdf ? (
-              <FileText className="h-5 w-5 text-orange-400" />
-            ) : (
-              <FileText className="h-5 w-5 text-slate-400" />
-            )}
+            <HeaderIcon className={`h-5 w-5 ${
+              isImage ? "text-violet-400"
+              : isVideo ? "text-fuchsia-400"
+              : isAudio ? "text-pink-400"
+              : isPdf  ? "text-orange-400"
+              : "text-slate-400"
+            }`} />
             <span className="text-sm font-medium text-white">
-              Decrypted Document
+              Decrypted {isVideo ? "Video" : isAudio ? "Audio" : "Document"}
             </span>
             <code className="ml-auto text-xs text-slate-500 font-mono">{mimeType}</code>
           </div>
@@ -549,22 +621,35 @@ function DocumentRenderer({
             {/* Secure canvas-based PDF viewer — no download/print controls */}
             {isPdf && <PdfCanvasViewer pdfBytes={bytes} />}
 
+            {isVideo && <VideoPlayer bytes={bytes} mimeType={mimeType} />}
+
+            {isAudio && <AudioPlayer bytes={bytes} mimeType={mimeType} />}
+
             {isText && textContent && (
               <pre className="text-sm text-slate-300 font-mono whitespace-pre-wrap bg-black/20 rounded-xl p-6 overflow-auto max-h-[80vh]">
                 {textContent}
               </pre>
             )}
 
-            {!isImage && !isPdf && !isText && (
+            {!isImage && !isPdf && !isVideo && !isAudio && !isText && (
               <div className="flex flex-col items-center justify-center py-16 gap-4">
                 <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/5">
                   <FileText className="h-8 w-8 text-slate-400" />
                 </div>
-                <p className="text-slate-400">
-                  File type ({mimeType}) cannot be previewed in browser.
+                <p className="text-slate-400 text-sm">
+                  This file type ({mimeType}) cannot be previewed in browser.
                 </p>
-                <p className="text-xs text-slate-500">
-                  This file type cannot be previewed in the browser.
+                {/* Offer a secure download for binary files */}
+                <a
+                  href={blobUrl}
+                  download={`qvault-decrypted.${mimeType.split("/")[1] || "bin"}`}
+                  className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40 transition-all"
+                >
+                  <Download className="h-4 w-4" />
+                  Download Decrypted File
+                </a>
+                <p className="text-xs text-slate-600">
+                  File is decrypted locally in your browser. Download is safe.
                 </p>
               </div>
             )}
@@ -824,16 +909,25 @@ export default function DocumentView() {
 
     const demoPreflightCheck = (docCid: string) => {
       const parsed = parseQLink(window.location.hash);
-      const urlMaxViews = parsed?.maxViews !== undefined ? parsed.maxViews : 3;
+      // Use the user-set maxViews from the URL hash fragment.
+      // Fall back to 1 (most restrictive) rather than a permissive default
+      // to prevent silently granting more views than the uploader intended.
+      const urlMaxViews    = parsed?.maxViews    !== undefined ? parsed.maxViews    : 1;
       const urlExpiryHours = parsed?.expiryHours !== undefined ? parsed.expiryHours : 0;
 
       const info = demoGetDocumentInfo(docCid);
       if (!info) {
-        // Document exists in IPFS but no demo contract record — allow access
-        // Initialize the viewer record in this browser using the rules parsed from the URL
+        // Document exists in IPFS but no demo contract record in this browser.
+        // CRITICAL: We must persist the record to localStorage RIGHT NOW.
+        // Without this, demoRequestAccess will also hit its !doc branch and
+        // create a fresh record with currentViews=0 every time — bypassing
+        // the view limit completely and allowing unlimited access.
         const expirationTimestamp = urlExpiryHours > 0
           ? Math.floor(Date.now() / 1000) + urlExpiryHours * 3600
           : 0;
+
+        // Persist to localStorage so demoRequestAccess finds and decrements it
+        demoCreateDocumentAccess(docCid, urlMaxViews, urlExpiryHours, "");
 
         setDocMeta({
           maxViews: urlMaxViews,
@@ -912,9 +1006,11 @@ export default function DocumentView() {
             setDenyReason(msg);
             return;
           }
-          // Fall back to demo mode for contract-not-deployed scenario
+          // Fall back to demo mode for contract-not-deployed scenario.
+          // IMPORTANT: pass parsed view limits so the user-set maxViews from
+          // the URL hash is honoured — not a silent hardcoded default.
           console.warn("[Qvault] requestAccess failed — demo fallback:", msg);
-          const result = demoRequestAccess(cid);
+          const result = demoRequestAccess(cid, parsed?.maxViews, parsed?.expiryHours);
           if (!result.granted) {
             setDenyReason(result.reason);
             setStage(mapReason(result.reason));
