@@ -823,10 +823,26 @@ export default function DocumentView() {
     };
 
     const demoPreflightCheck = (docCid: string) => {
+      const parsed = parseQLink(window.location.hash);
+      const urlMaxViews = parsed?.maxViews !== undefined ? parsed.maxViews : 3;
+      const urlExpiryHours = parsed?.expiryHours !== undefined ? parsed.expiryHours : 0;
+
       const info = demoGetDocumentInfo(docCid);
       if (!info) {
         // Document exists in IPFS but no demo contract record — allow access
-        setDocMeta({ maxViews: 3, currentViews: 0, remainingViews: 3, expirationTimestamp: 0, isActive: true, owner: "0xDemo" });
+        // Initialize the viewer record in this browser using the rules parsed from the URL
+        const expirationTimestamp = urlExpiryHours > 0
+          ? Math.floor(Date.now() / 1000) + urlExpiryHours * 3600
+          : 0;
+
+        setDocMeta({
+          maxViews: urlMaxViews,
+          currentViews: 0,
+          remainingViews: urlMaxViews,
+          expirationTimestamp,
+          isActive: true,
+          owner: "0xDemo"
+        });
         setStage("preflight");
         return;
       }
@@ -867,7 +883,7 @@ export default function DocumentView() {
 
       if (isDemo) {
         // Demo mode: enforce rules in localStorage
-        const result = demoRequestAccess(cid);
+        const result = demoRequestAccess(cid, parsed?.maxViews, parsed?.expiryHours);
         if (!result.granted) {
           setDenyReason(result.reason);
           setStage(mapReason(result.reason));

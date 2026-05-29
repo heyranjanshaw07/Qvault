@@ -249,7 +249,9 @@ export default function UploadView() {
       const link = buildQLink(
         uploadResult.cid,
         result.share1,
-        usedDemoContract ? result.share2 : undefined
+        usedDemoContract ? result.share2 : undefined,
+        usedDemoContract ? finalMaxViews : undefined,
+        usedDemoContract ? finalExpiryHours : undefined
       );
       setQLink(link);
       setStage("done");

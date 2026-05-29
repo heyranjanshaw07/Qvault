@@ -420,15 +420,32 @@ export function demoCreateDocumentAccess(
 }
 
 /** Demo version of requestAccess */
-export function demoRequestAccess(cid: string): { granted: boolean; reason: string } {
+export function demoRequestAccess(
+  cid: string,
+  urlMaxViews?: number,
+  urlExpiryHours?: number
+): { granted: boolean; reason: string } {
   const docs = loadDemoDocs();
   let doc  = docs[cid];
 
   if (!doc) {
     // CID not in this browser (link opened in different browser/device).
-    // Auto-create a permissive record so the user reaches the fetch step,
-    // where a clear "Demo Mode" error is shown if the file is also absent.
-    doc = { cid, maxViews: 3, currentViews: 0, expirationTimestamp: 0, isActive: true, owner: "0xDemo", encryptedKeyHash: "" };
+    // Auto-create a permissive record using the limits from the URL
+    const limitViews = urlMaxViews !== undefined ? urlMaxViews : 3;
+    const limitExpiry = urlExpiryHours !== undefined ? urlExpiryHours : 0;
+    const expirationTimestamp = limitExpiry > 0
+      ? Math.floor(Date.now() / 1000) + limitExpiry * 3600
+      : 0;
+
+    doc = {
+      cid,
+      maxViews: limitViews,
+      currentViews: 0,
+      expirationTimestamp,
+      isActive: true,
+      owner: "0xDemo",
+      encryptedKeyHash: ""
+    };
     docs[cid] = doc;
   }
 

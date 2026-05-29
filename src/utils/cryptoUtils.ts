@@ -265,17 +265,30 @@ export function buildQLink(
   cid: string,
   share1: string,
   share2?: string,
+  maxViews?: number,
+  expiryHours?: number,
   baseUrl?: string
 ): string {
   const origin = baseUrl ?? window.location.origin;
-  const hash = share2 ? `${share1}.${share2}` : share1;
+  let hash = share1;
+  if (share2) {
+    hash += `.${share2}`;
+    if (maxViews !== undefined && expiryHours !== undefined) {
+      hash += `.${maxViews}.${expiryHours}`;
+    }
+  }
   return `${origin}/view/${cid}#${hash}`;
 }
 
 /**
- * Parses the Q-Link URL fragment to extract Share 1 and optional Share 2 fallback.
+ * Parses the Q-Link URL fragment to extract Share 1, Share 2, and optional access rules.
  */
-export function parseQLink(hash?: string): { share1: string; share2?: string } | null {
+export function parseQLink(hash?: string): {
+  share1: string;
+  share2?: string;
+  maxViews?: number;
+  expiryHours?: number;
+} | null {
   try {
     const raw = (hash ?? window.location.hash).replace(/^#/, "").trim();
     if (!raw) {
@@ -286,6 +299,8 @@ export function parseQLink(hash?: string): { share1: string; share2?: string } |
     return {
       share1: parts[0],
       share2: parts[1] || undefined,
+      maxViews: parts[2] ? parseInt(parts[2], 10) : undefined,
+      expiryHours: parts[3] ? parseInt(parts[3], 10) : undefined,
     };
   } catch (err) {
     console.error("[Qvault Q-VC] Failed to parse Q-Link hash:", err);
