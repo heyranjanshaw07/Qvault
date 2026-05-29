@@ -37,11 +37,7 @@ jobs:
           distribution: "temurin"
           java-version: "17"
 
-      # ── 6. Setup Android SDK ─────────────────────────────────────────────────
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      # ── 7. Sync web assets into Android project ──────────────────────────────
+      # ── 6. Sync web assets into Android project ──────────────────────────────
       - name: Sync Capacitor
         run: npx cap sync android
 

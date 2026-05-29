@@ -1,5 +1,5 @@
 {
-  "appId": "com.bytebrains.qvault",
+  "appId": "com.qvault.app",
   "appName": "QVault",
   "webDir": "dist",
   "server": {
