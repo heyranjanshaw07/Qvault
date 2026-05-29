@@ -18,7 +18,7 @@ import { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import {
   Upload, Shield, Link2, Copy, Check, AlertCircle,
-  FileText, Image, File, Eye, Clock, Zap, ChevronDown,
+  FileText, Image, File, Eye, Clock, Zap,
   Loader2, ExternalLink, Lock, Cpu, Globe
 } from "lucide-react";
 import {
@@ -64,15 +64,6 @@ const STAGES: Record<Stage, StageInfo> = {
 };
 
 const MAX_FILE_SIZE_MB = 50;
-const MAX_VIEWS_OPTIONS = [1, 3, 5, 10, 25, 50];
-const EXPIRY_OPTIONS    = [
-  { label: "Never",    hours: 0   },
-  { label: "1 Hour",   hours: 1   },
-  { label: "6 Hours",  hours: 6   },
-  { label: "24 Hours", hours: 24  },
-  { label: "7 Days",   hours: 168 },
-  { label: "30 Days",  hours: 720 },
-];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SUB-COMPONENTS
@@ -393,52 +384,64 @@ export default function UploadView() {
             {/* Max Views */}
             <div>
               <label className="mb-2 flex items-center gap-2 text-sm text-slate-400">
-                <Eye className="h-4 w-4" />
+                <Eye className="h-4 w-4 text-cyan-400" />
                 Maximum Views
-                <span className="ml-auto text-cyan-400 font-semibold">{maxViews}</span>
               </label>
-              <div className="flex gap-2 flex-wrap">
-                {MAX_VIEWS_OPTIONS.map(v => (
-                  <button
-                    key={v}
-                    onClick={() => setMaxViews(v)}
-                    disabled={isProcessing}
-                    className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
-                      maxViews === v
-                        ? "bg-cyan-500/20 border border-cyan-500/40 text-cyan-400"
-                        : "border border-white/5 bg-white/[0.03] text-slate-400 hover:border-white/10 hover:text-slate-300"
-                    }`}
-                  >
-                    {v}
-                  </button>
-                ))}
-              </div>
+              <input
+                type="number"
+                min={1}
+                max={9999}
+                value={maxViews}
+                onChange={e => {
+                  const val = Math.max(1, parseInt(e.target.value) || 1);
+                  setMaxViews(val);
+                }}
+                disabled={isProcessing}
+                className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50 disabled:opacity-50"
+                placeholder="Enter maximum allowed views (e.g., 3)"
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                This Q-Link will permanently burn and deactivate after this number of views.
+              </p>
             </div>
 
             {/* Expiration */}
             <div>
               <label className="mb-2 flex items-center gap-2 text-sm text-slate-400">
-                <Clock className="h-4 w-4" />
-                Expiration Time
-                <span className="ml-auto text-violet-400 font-semibold">
-                  {EXPIRY_OPTIONS.find(o => o.hours === expiryHours)?.label ?? "Custom"}
-                </span>
+                <Clock className="h-4 w-4 text-violet-400" />
+                Expiration Time (in Hours)
               </label>
-              <div className="relative">
-                <select
-                  value={expiryHours}
-                  onChange={e => setExpiryHours(Number(e.target.value))}
-                  disabled={isProcessing}
-                  className="w-full appearance-none rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500/50 disabled:opacity-50"
-                >
-                  {EXPIRY_OPTIONS.map(o => (
-                    <option key={o.hours} value={o.hours} className="bg-[#0f1220]">
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 pointer-events-none" />
-              </div>
+              <input
+                type="number"
+                min={0}
+                max={87600}
+                value={expiryHours}
+                onChange={e => {
+                  const val = Math.max(0, parseInt(e.target.value) || 0);
+                  setExpiryHours(val);
+                }}
+                disabled={isProcessing}
+                className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500/50 disabled:opacity-50"
+                placeholder="Enter duration in hours (e.g., 24)"
+              />
+              <p className="mt-1.5 text-xs text-slate-400 font-medium">
+                {expiryHours === 0 ? (
+                  <span className="text-slate-500">✓ Link will never expire.</span>
+                ) : (
+                  <span className="text-violet-400">
+                    ✓ Link will expire in{" "}
+                    {expiryHours >= 24 ? (
+                      <>
+                        {Math.floor(expiryHours / 24)} day{Math.floor(expiryHours / 24) !== 1 ? "s" : ""}
+                        {expiryHours % 24 > 0 ? ` and ${expiryHours % 24} hour${expiryHours % 24 !== 1 ? "s" : ""}` : ""}
+                      </>
+                    ) : (
+                      `${expiryHours} hour${expiryHours !== 1 ? "s" : ""}`
+                    )}
+                    .
+                  </span>
+                )}
+              </p>
             </div>
           </div>
 
