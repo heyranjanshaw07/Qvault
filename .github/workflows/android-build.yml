@@ -24,39 +24,24 @@ jobs:
 
       # ── 3. Install web dependencies ─────────────────────────────────────────
       - name: Install project dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
-      # ── 4. Install Capacitor ─────────────────────────────────────────────────
-      - name: Install Capacitor packages
-        run: |
-          npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest
-
-      # ── 5. Build web app (Android config — no viteSingleFile) ───────────────
+      # ── 4. Build web app (Android config — no viteSingleFile) ───────────────
       - name: Build web app for Android
         run: npx vite build --config vite.config.android.ts
 
-      # ── 6. Java 17 ──────────────────────────────────────────────────────────
+      # ── 5. Java 17 ──────────────────────────────────────────────────────────
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: "temurin"
           java-version: "17"
 
-      # ── 7. Android SDK ───────────────────────────────────────────────────────
+      # ── 6. Setup Android SDK ─────────────────────────────────────────────────
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK platform & build tools
-        run: |
-          sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "platform-tools"
-          yes | sdkmanager --licenses || true
-
-      # ── 8. Capacitor — add Android platform ─────────────────────────────────
-      - name: Add Android platform (Skip if exists)
-        run: npx cap add android || true
-        continue-on-error: true
-
-      # ── 9. Sync web assets into Android project ──────────────────────────────
+      # ── 7. Sync web assets into Android project ──────────────────────────────
       - name: Sync Capacitor
         run: npx cap sync android
 
