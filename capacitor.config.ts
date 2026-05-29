@@ -6,6 +6,8 @@ const config: CapacitorConfig = {
   webDir: "dist",
   server: {
     androidScheme: "https",
+    url: "https://qvault-eta.vercel.app",
+    cleartext: true
   },
   android: {
     backgroundColor: "#050510",
