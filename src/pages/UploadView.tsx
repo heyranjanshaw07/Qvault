@@ -126,8 +126,8 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
 
 export default function UploadView() {
   const [file,            setFile]            = useState<File | null>(null);
-  const [maxViews,        setMaxViews]        = useState(3);
-  const [expiryHours,     setExpiryHours]     = useState(0);
+  const [maxViews,        setMaxViews]        = useState<number | "">("");
+  const [expiryHours,     setExpiryHours]     = useState<number | "">("");
   const [stage,           setStage]           = useState<Stage>("idle");
   const [errorMsg,        setErrorMsg]        = useState("");
   const [qLink,           setQLink]           = useState("");
@@ -175,11 +175,14 @@ export default function UploadView() {
 
   // ── Main "Generate Q-Link" Handler ────────────────────────────────────────
   const generateQLink = async () => {
-    if (!file) return;
+    if (!file || maxViews === "" || expiryHours === "") return;
 
     setErrorMsg("");
     setQLink("");
     setCid("");
+
+    const finalMaxViews = Number(maxViews);
+    const finalExpiryHours = Number(expiryHours);
 
     try {
       // ── Step 1: Read file bytes ─────────────────────────────────────────
@@ -219,8 +222,8 @@ export default function UploadView() {
         try {
           txh = await createDocumentAccess(
             uploadResult.cid,
-            maxViews,
-            expiryHours,
+            finalMaxViews,
+            finalExpiryHours,
             result.share2
           );
           setTxHash(txh);
@@ -229,7 +232,7 @@ export default function UploadView() {
           // If contract address not set, fall back to demo
           if (errMsg.includes("NOT_FOUND") || errMsg.includes("0x0000")) {
             console.warn("[Qvault] Contract not deployed — using demo mode");
-            demoCreateDocumentAccess(uploadResult.cid, maxViews, expiryHours, result.share2);
+            demoCreateDocumentAccess(uploadResult.cid, finalMaxViews, finalExpiryHours, result.share2);
             usedDemoContract = true;
           } else {
             throw contractErr;
@@ -237,7 +240,7 @@ export default function UploadView() {
         }
       } else {
         // Demo mode: store rules in localStorage
-        demoCreateDocumentAccess(uploadResult.cid, maxViews, expiryHours, result.share2);
+        demoCreateDocumentAccess(uploadResult.cid, finalMaxViews, finalExpiryHours, result.share2);
         usedDemoContract = true;
         await new Promise(r => setTimeout(r, 800)); // Simulate tx wait
       }
@@ -393,8 +396,15 @@ export default function UploadView() {
                 max={9999}
                 value={maxViews}
                 onChange={e => {
-                  const val = Math.max(1, parseInt(e.target.value) || 1);
-                  setMaxViews(val);
+                  const val = e.target.value;
+                  if (val === "") {
+                    setMaxViews("");
+                  } else {
+                    const parsed = parseInt(val);
+                    if (!isNaN(parsed)) {
+                      setMaxViews(Math.max(1, parsed));
+                    }
+                  }
                 }}
                 disabled={isProcessing}
                 className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50 disabled:opacity-50"
@@ -417,15 +427,24 @@ export default function UploadView() {
                 max={87600}
                 value={expiryHours}
                 onChange={e => {
-                  const val = Math.max(0, parseInt(e.target.value) || 0);
-                  setExpiryHours(val);
+                  const val = e.target.value;
+                  if (val === "") {
+                    setExpiryHours("");
+                  } else {
+                    const parsed = parseInt(val);
+                    if (!isNaN(parsed)) {
+                      setExpiryHours(Math.max(0, parsed));
+                    }
+                  }
                 }}
                 disabled={isProcessing}
                 className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500/50 disabled:opacity-50"
                 placeholder="Enter duration in hours (e.g., 24)"
               />
               <p className="mt-1.5 text-xs text-slate-400 font-medium">
-                {expiryHours === 0 ? (
+                {expiryHours === "" ? (
+                  <span className="text-slate-500">Please enter expiration duration (0 for never).</span>
+                ) : expiryHours === 0 ? (
                   <span className="text-slate-500">✓ Link will never expire.</span>
                 ) : (
                   <span className="text-violet-400">
@@ -634,7 +653,7 @@ export default function UploadView() {
             <div className="p-6">
               <button
                 onClick={generateQLink}
-                disabled={!file || isProcessing}
+                disabled={!file || isProcessing || maxViews === "" || expiryHours === ""}
                 className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-violet-600 py-3.5 font-bold text-white shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
               >
                 {isProcessing ? (
