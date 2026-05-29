@@ -52,8 +52,9 @@ jobs:
           yes | sdkmanager --licenses || true
 
       # ── 8. Capacitor — add Android platform ─────────────────────────────────
-      - name: Add Android platform
-        run: npx cap add android
+      - name: Add Android platform (Skip if exists)
+        run: npx cap add android || true
+        continue-on-error: true
 
       # ── 9. Sync web assets into Android project ──────────────────────────────
       - name: Sync Capacitor
